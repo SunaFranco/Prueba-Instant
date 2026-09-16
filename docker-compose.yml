@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  # 1. Almacén en memoria y Broker de Mensajes
+  redis:
+    image: redis:7-alpine
+    container_name: instant_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - instant_network
+
+  # 2. Servidor Backend API (Python Flask)
+  backend_api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: instant_backend_api
+    restart: unless-stopped
+    environment:
+      - FLASK_ENV=${FLASK_ENV:-development}
+      - FLASK_DEBUG=${FLASK_DEBUG:-True}
+      - PORT=5000
+      - SECRET_KEY=${SECRET_KEY:-super-secret-jwt-and-flask-key-change-in-production-12345}
+      - JWT_EXPIRATION_HOURS=${JWT_EXPIRATION_HOURS:-24}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - TMDB_API_KEY=${TMDB_API_KEY}
+      - TMDB_BASE_URL=${TMDB_BASE_URL:-https://api.themoviedb.org/3}
+      - TMDB_IMAGE_BASE_URL=${TMDB_IMAGE_BASE_URL:-https://image.tmdb.org/t/p/w500}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - RECOMMENDATION_QUEUE_NAME=${RECOMMENDATION_QUEUE_NAME:-recommendation_jobs}
+    ports:
+      - "5000:5000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - instant_network
+
+  # 3. Worker Asíncrono de Inferencia y Rate Limiting
+  backend_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: instant_backend_worker
+    restart: unless-stopped
+    command: python worker.py
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - TMDB_API_KEY=${TMDB_API_KEY}
+      - TMDB_BASE_URL=${TMDB_BASE_URL:-https://api.themoviedb.org/3}
+      - TMDB_IMAGE_BASE_URL=${TMDB_IMAGE_BASE_URL:-https://image.tmdb.org/t/p/w500}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - RECOMMENDATION_QUEUE_NAME=${RECOMMENDATION_QUEUE_NAME:-recommendation_jobs}
+      - GROQ_MAX_REQUESTS_PER_MINUTE=${GROQ_MAX_REQUESTS_PER_MINUTE:-20}
+      - GROQ_RETRY_MAX_ATTEMPTS=${GROQ_RETRY_MAX_ATTEMPTS:-5}
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - instant_network
+
+  # 4. Frontend Web (React + Vite + Tailwind CSS)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: instant_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend_api
+    networks:
+      - instant_network
+
+volumes:
+  redis_data:
+    driver: local
+
+networks:
+  instant_network:
+    driver: bridge
