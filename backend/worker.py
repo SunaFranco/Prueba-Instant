@@ -99,10 +99,9 @@ def process_recommendation_job(job_data: dict, rate_limiter: TokenBucketRateLimi
 
         logger.info(f"Seleccionadas {len(selected_candidates)} recomendaciones finales para el usuario.")
 
-        # 7. Enriquecer con TMDB y persistir en Supabase
-        completed_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
-
-        for idx, rec_item in enumerate(selected_candidates):
+        # 7. Enriquecer con TMDB todas las recomendaciones seleccionadas
+        enriched_recommendations = []
+        for rec_item in selected_candidates:
             tmdb_movie = TmdbService.find_movie_by_title_and_year(
                 title=rec_item.title,
                 year=rec_item.release_year
@@ -125,31 +124,42 @@ def process_recommendation_job(job_data: dict, rate_limiter: TokenBucketRateLimi
                     except Exception as e:
                         logger.warning(f"No se pudo guardar la película en tabla movies: {str(e)}")
 
-            # Persistencia en Supabase
-            if supabase:
-                if idx == 0:
-                    # Actualizar registro principal
-                    supabase.table("recommendations").update({
-                        "status": "COMPLETED",
-                        "recommended_title": rec_item.title,
-                        "recommended_tmdb_id": recommended_tmdb_id,
-                        "rationale": rec_item.rationale,
-                        "completed_at": completed_at
-                    }).eq("job_id", job_id).execute()
-                else:
-                    # Insertar registros complementarios del mismo trabajo
-                    child_job_id = f"{job_id}_{idx+1}"
+            enriched_recommendations.append({
+                "item": rec_item,
+                "tmdb_id": recommended_tmdb_id
+            })
+
+        # 8. Persistir en Supabase (primero las complementarias, y al final el registro principal como COMPLETED)
+        completed_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        if supabase and enriched_recommendations:
+            # Insertar registros secundarios primero (idx > 0)
+            for idx in range(1, len(enriched_recommendations)):
+                child_rec = enriched_recommendations[idx]
+                child_job_id = f"{job_id}_{idx+1}"
+                try:
                     supabase.table("recommendations").insert({
                         "user_id": user_id,
                         "job_id": child_job_id,
                         "status": "COMPLETED",
-                        "recommended_title": rec_item.title,
-                        "recommended_tmdb_id": recommended_tmdb_id,
-                        "rationale": rec_item.rationale,
+                        "recommended_title": child_rec["item"].title,
+                        "recommended_tmdb_id": child_rec["tmdb_id"],
+                        "rationale": child_rec["item"].rationale,
                         "completed_at": completed_at
                     }).execute()
+                except Exception as ins_err:
+                    logger.warning(f"No se pudo insertar recomendación secundaria {child_job_id}: {str(ins_err)}")
 
-        logger.info(f"✔ Trabajo {job_id} procesado exitosamente con {len(selected_candidates)} recomendaciones.")
+            # Finalmente actualizar el registro principal a COMPLETED una vez que todas las demás ya existen
+            main_rec = enriched_recommendations[0]
+            supabase.table("recommendations").update({
+                "status": "COMPLETED",
+                "recommended_title": main_rec["item"].title,
+                "recommended_tmdb_id": main_rec["tmdb_id"],
+                "rationale": main_rec["item"].rationale,
+                "completed_at": completed_at
+            }).eq("job_id", job_id).execute()
+
+        logger.info(f"✔ Trabajo {job_id} procesado exitosamente con {len(selected_candidates)} recomendaciones persistidas.")
 
     except Exception as e:
         logger.error(f"✘ Fallo al procesar trabajo {job_id}: {str(e)}")
