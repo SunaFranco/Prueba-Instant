@@ -9,7 +9,7 @@ Combina el catálogo de películas de **The Movie Database (TMDB)** con inferenc
 * `app/services/`: Lógica de negocio (Autenticación, llamadas a TMDB, cálculo de prompts, persistencia de Likes).
 * `app/db/`: Inicialización del cliente Supabase (`supabase-py`) y conexión PostgreSQL.
 * `app/queue/`: Productor de tareas a Redis y algoritmo Token Bucket de Rate Limiting.
-* `worker.py`: Proceso consumidor desacoplado que extrae de Redis, consulta a Groq con rate limiting y actualiza Supabase.
+* `worker.py`: Proceso consumidor desacoplado que extrae de Redis, solicita 10 candidatos a Groq, deduplica contra favoritos e historial previo, selecciona el Top 3, enriquece con TMDB y persiste en Supabase.
 
 ## Principios y Convenciones de Código
 1. **Clean Code & Tipado:** Utilizar Type Hints en funciones de Python y validadores Pydantic v2 en DTOs.

@@ -68,12 +68,19 @@ class UserLikeItem(BaseModel):
 # ------------------------------------------------------------------------------
 # DTOs de Recomendación e Inferencia LLM
 # ------------------------------------------------------------------------------
-class GroqRecommendationOutput(BaseModel):
-    """Esquema estricto exigido al modelo de Groq vía Structured Outputs."""
+class GroqMovieItem(BaseModel):
+    """Esquema de una película individual devuelta por Groq."""
     title: str = Field(..., description="Título exacto de la película recomendada")
     release_year: Optional[int] = Field(None, description="Año de estreno aproximado")
     rationale: str = Field(..., description="Justificación detallada y personalizada de la recomendación")
     genres: Optional[List[str]] = Field(default=[], description="Géneros principales de la película")
+
+class GroqRecommendationListOutput(BaseModel):
+    """Esquema estricto exigido al modelo de Groq con lista de candidatos."""
+    recommendations: List[GroqMovieItem] = Field(..., min_length=1, description="Lista de 10 películas recomendadas")
+
+# Para compatibilidad retroactiva
+GroqRecommendationOutput = GroqMovieItem
 
 class RecommendationJobPayload(BaseModel):
     job_id: str
@@ -83,5 +90,6 @@ class RecommendationJobPayload(BaseModel):
 class RecommendationStatusResponse(BaseModel):
     job_id: str
     status: str
+    recommendations: Optional[List[Dict[str, Any]]] = None
     recommendation: Optional[Dict[str, Any]] = None
     error_message: Optional[str] = None

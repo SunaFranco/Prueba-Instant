@@ -74,36 +74,46 @@ def get_recommendation_status(job_id: str):
     try:
         res = supabase.table("recommendations") \
             .select("id, job_id, status, recommended_title, recommended_tmdb_id, rationale, error_message, created_at, completed_at, movies(poster_path, overview, vote_average, release_date, genres)") \
-            .eq("job_id", job_id) \
             .eq("user_id", user_id) \
+            .in_("job_id", [job_id, f"{job_id}_2", f"{job_id}_3"]) \
+            .order("created_at", desc=False) \
             .execute()
 
         if not res.data or len(res.data) == 0:
             raise AppException("Trabajo de recomendación no encontrado", 404)
 
-        row = res.data[0]
-        status = row.get("status", "PENDING")
+        # La fila principal determina el estado global
+        main_row = next((r for r in res.data if r.get("job_id") == job_id), res.data[0])
+        status = main_row.get("status", "PENDING")
 
         response = {
-            "job_id": row["job_id"],
+            "job_id": job_id,
             "status": status,
-            "error_message": row.get("error_message")
+            "error_message": main_row.get("error_message"),
+            "recommendations": []
         }
 
         if status == "COMPLETED":
-            movie_meta = row.get("movies") or {}
-            response["recommendation"] = {
-                "id": row["id"],
-                "recommended_title": row["recommended_title"],
-                "recommended_tmdb_id": row.get("recommended_tmdb_id"),
-                "rationale": row.get("rationale"),
-                "poster_path": movie_meta.get("poster_path"),
-                "overview": movie_meta.get("overview"),
-                "vote_average": movie_meta.get("vote_average"),
-                "release_date": movie_meta.get("release_date"),
-                "genres": movie_meta.get("genres"),
-                "completed_at": row.get("completed_at")
-            }
+            recs_list = []
+            for row in res.data:
+                if row.get("status") == "COMPLETED" and row.get("recommended_title"):
+                    movie_meta = row.get("movies") or {}
+                    recs_list.append({
+                        "id": row["id"],
+                        "job_id": row["job_id"],
+                        "recommended_title": row["recommended_title"],
+                        "recommended_tmdb_id": row.get("recommended_tmdb_id"),
+                        "rationale": row.get("rationale"),
+                        "poster_path": movie_meta.get("poster_path"),
+                        "overview": movie_meta.get("overview"),
+                        "vote_average": float(movie_meta.get("vote_average", 0.0)) if movie_meta.get("vote_average") is not None else 0.0,
+                        "release_date": movie_meta.get("release_date"),
+                        "genres": movie_meta.get("genres") or [],
+                        "completed_at": row.get("completed_at")
+                    })
+            response["recommendations"] = recs_list
+            if recs_list:
+                response["recommendation"] = recs_list[0]
 
         return jsonify(response), 200
     except AppException:

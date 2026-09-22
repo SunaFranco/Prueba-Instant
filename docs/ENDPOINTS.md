@@ -179,13 +179,14 @@ Encola una nueva solicitud de recomendación para el usuario autenticado.
   ```
 
 ### `GET /recommendations/status/<string:job_id>`
-Consulta el estado de procesamiento del trabajo encolado.
+Consulta el estado de procesamiento del trabajo encolado. Cuando finaliza, retorna la lista de las 3 recomendaciones deduplicadas.
 * **Headers:** `Authorization: Bearer <token>`
 * **Response cuando está en proceso (200 OK):**
   ```json
   {
     "job_id": "rec_job_9a8b7c6d5e4f",
-    "status": "PROCESSING"
+    "status": "PROCESSING",
+    "recommendations": []
   }
   ```
 * **Response cuando finalizó (200 OK):**
@@ -193,15 +194,41 @@ Consulta el estado de procesamiento del trabajo encolado.
   {
     "job_id": "rec_job_9a8b7c6d5e4f",
     "status": "COMPLETED",
-    "recommendation": {
-      "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-      "recommended_title": "Interstellar",
-      "recommended_tmdb_id": 157336,
-      "poster_path": "/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg",
-      "overview": "A team of explorers travel through a wormhole in space in an attempt to ensure humanity's survival.",
-      "rationale": "Dado que te fascinó 'Inception' por sus giros conceptuales y su trama de ciencia ficción profunda, 'Interstellar' del mismo director Christopher Nolan te cautivará con su exploración del tiempo, la relatividad y la ambición humana.",
-      "completed_at": "2026-09-15T15:35:10Z"
-    }
+    "recommendations": [
+      {
+        "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "job_id": "rec_job_9a8b7c6d5e4f",
+        "recommended_title": "Interstellar",
+        "recommended_tmdb_id": 157336,
+        "poster_path": "/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg",
+        "overview": "A team of explorers travel through a wormhole in space in an attempt to ensure humanity's survival.",
+        "rationale": "Dado que te fascinó 'Inception' por sus giros conceptuales y su trama de ciencia ficción profunda, 'Interstellar' del mismo director Christopher Nolan te cautivará con su exploración del tiempo y la relatividad.",
+        "vote_average": 8.4,
+        "completed_at": "2026-09-15T15:35:10Z"
+      },
+      {
+        "id": "a12bc34d-67ef-4890-b123-1f23c4d5e680",
+        "job_id": "rec_job_9a8b7c6d5e4f_2",
+        "recommended_title": "Blade Runner 2049",
+        "recommended_tmdb_id": 335984,
+        "poster_path": "/gajva2L0rPYkEWjzgFlBXCAVBE5.jpg",
+        "overview": "Thirty years after the events of the first film, a new Blade Runner discovers a long-buried secret.",
+        "rationale": "Una experiencia visual impresionante que profundiza en dilemas existenciales similares a tu historial cinematográfico.",
+        "vote_average": 7.9,
+        "completed_at": "2026-09-15T15:35:10Z"
+      },
+      {
+        "id": "c34de56f-78ab-4901-c234-2a34b5c6d791",
+        "job_id": "rec_job_9a8b7c6d5e4f_3",
+        "recommended_title": "Arrival",
+        "recommended_tmdb_id": 329865,
+        "poster_path": "/x2O0hv9N7n845gq3BflF1eYyA2Z.jpg",
+        "overview": "Taking place after alien spacecrafts land around the world, a linguist is recruited to communicate.",
+        "rationale": "Perfecta para quienes aprecian historias reflexivas y estructuras narrativas no lineales.",
+        "vote_average": 7.6,
+        "completed_at": "2026-09-15T15:35:10Z"
+      }
+    ]
   }
   ```
 
@@ -214,6 +241,7 @@ Lista el historial completo de recomendaciones generadas previamente para el usu
     "recommendations": [
       {
         "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "job_id": "rec_job_9a8b7c6d5e4f",
         "recommended_title": "Interstellar",
         "recommended_tmdb_id": 157336,
         "poster_path": "/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg",
@@ -223,3 +251,15 @@ Lista el historial completo de recomendaciones generadas previamente para el usu
     ]
   }
   ```
+
+### `DELETE /recommendations/<string:rec_id>`
+Elimina una recomendación del historial del usuario (por ejemplo, al convertirla en favorito o descartarla).
+* **Headers:** `Authorization: Bearer <token>`
+* **Response (200 OK):**
+  ```json
+  {
+    "message": "Recomendación eliminada exitosamente",
+    "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+  }
+  ```
+

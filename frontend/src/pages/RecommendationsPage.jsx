@@ -30,7 +30,7 @@ export const RecommendationsPage = () => {
     };
   }, []);
 
-  // Agregar a favoritos y remover del historial
+  // Agregar a favoritos y remover del historial / vista activa
   const handleAddToFavorites = async (rec) => {
     if (!rec || savingFavId) return;
     setSavingFavId(rec.id);
@@ -50,6 +50,15 @@ export const RecommendationsPage = () => {
 
       // Remover inmediatamente del estado local de la lista
       setRecommendations((prev) => prev.filter((r) => r.id !== rec.id));
+
+      // Remover de la tarjeta activa si está presente
+      setActiveJob((prev) => {
+        if (!prev || !prev.results) return prev;
+        return {
+          ...prev,
+          results: prev.results.filter((r) => r.id !== rec.id)
+        };
+      });
     } catch (err) {
       console.error('Error al agregar a favoritos desde historial:', err);
     } finally {
@@ -64,11 +73,12 @@ export const RecommendationsPage = () => {
     pollIntervalRef.current = setInterval(async () => {
       try {
         const res = await recommendationsApi.getStatus(jobId);
-        const { status, recommendation, error_message } = res.data;
+        const { status, recommendations: recsList, recommendation, error_message } = res.data;
 
         if (status === 'COMPLETED') {
           clearInterval(pollIntervalRef.current);
-          setActiveJob({ jobId, status: 'COMPLETED', result: recommendation });
+          const finalResults = (recsList && recsList.length > 0) ? recsList : (recommendation ? [recommendation] : []);
+          setActiveJob({ jobId, status: 'COMPLETED', results: finalResults });
           setRequesting(false);
           fetchRecommendations(); // Refrescar el historial
         } else if (status === 'FAILED') {
@@ -86,12 +96,12 @@ export const RecommendationsPage = () => {
 
   const handleRequestRecommendation = async () => {
     setRequesting(true);
-    setActiveJob({ jobId: null, status: 'PENDING', result: null, error: null });
+    setActiveJob({ jobId: null, status: 'PENDING', results: [], error: null });
 
     try {
       const res = await recommendationsApi.requestRecommendation();
       const { job_id } = res.data;
-      setActiveJob({ jobId: job_id, status: 'PENDING', result: null, error: null });
+      setActiveJob({ jobId: job_id, status: 'PENDING', results: [], error: null });
       startPolling(job_id);
     } catch (err) {
       console.error('Error al encolar recomendación:', err);
@@ -118,7 +128,7 @@ export const RecommendationsPage = () => {
             </h1>
           </div>
           <p className="text-sm text-slate-300 max-w-2xl leading-relaxed">
-            Nuestro sistema analiza tus películas favoritas, construye un perfil de preferencias cinematográficas y consulta al LLM (Groq) mediante colas asíncronas con rate limiting.
+            Nuestro sistema analiza tus películas favoritas, consulta a Groq solicitando 10 candidatas, deduplica contra tu historial previo y te entrega las 3 mejores recomendaciones personalizadas.
           </p>
         </div>
 
@@ -161,7 +171,7 @@ export const RecommendationsPage = () => {
             {activeJob.status === 'PROCESSING' && (
               <div className="flex items-center space-x-3 text-sky-400">
                 <Loader2 className="w-5 h-5 animate-spin" />
-                <span className="text-sm font-medium">Worker ejecutando inferencia en Groq respetando el Rate Limit...</span>
+                <span className="text-sm font-medium">Worker analizando 10 candidatas en Groq y deduplicando contra tu historial...</span>
               </div>
             )}
 
@@ -172,37 +182,66 @@ export const RecommendationsPage = () => {
               </div>
             )}
 
-            {activeJob.status === 'COMPLETED' && activeJob.result && (
+            {activeJob.status === 'COMPLETED' && activeJob.results && activeJob.results.length > 0 && (
               <div className="space-y-4">
                 <div className="flex items-center space-x-2 text-emerald-400 text-sm font-semibold">
                   <CheckCircle2 className="w-5 h-5" />
-                  <span>¡Recomendación lista!</span>
+                  <span>¡{activeJob.results.length} recomendaciones listas y deduplicadas!</span>
                 </div>
 
-                <div className="flex flex-col md:flex-row gap-6 bg-slate-950/60 p-5 rounded-xl border border-slate-800/80">
-                  {activeJob.result.poster_path && (
-                    <img
-                      src={activeJob.result.poster_path}
-                      alt={activeJob.result.recommended_title}
-                      className="w-32 sm:w-40 rounded-lg object-cover shadow-lg aspect-[2/3] shrink-0"
-                    />
-                  )}
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold text-white mb-2">
-                      {activeJob.result.recommended_title}
-                    </h3>
-                    <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-xl text-amber-200/90 text-sm leading-relaxed mb-3">
-                      <p className="font-semibold text-amber-400 text-xs uppercase tracking-wider mb-1">
-                        ¿Por qué te la recomendamos?
-                      </p>
-                      {activeJob.result.rationale}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+                  {activeJob.results.map((item) => (
+                    <div
+                      key={item.id || item.recommended_title}
+                      className="flex flex-col bg-slate-950/60 p-5 rounded-2xl border border-slate-800/80 shadow-md justify-between"
+                    >
+                      <div>
+                        {item.poster_path ? (
+                          <img
+                            src={item.poster_path}
+                            alt={item.recommended_title}
+                            className="w-full h-48 sm:h-56 rounded-xl object-cover shadow-lg mb-4"
+                          />
+                        ) : (
+                          <div className="w-full h-48 sm:h-56 rounded-xl bg-slate-800 flex items-center justify-center text-xs text-slate-500 mb-4">
+                            Sin Póster
+                          </div>
+                        )}
+
+                        <h3 className="text-lg font-bold text-white mb-1.5 line-clamp-1">
+                          {item.recommended_title}
+                        </h3>
+
+                        <div className="bg-amber-500/10 border border-amber-500/20 p-3.5 rounded-xl text-amber-200/90 text-xs leading-relaxed mb-3">
+                          <p className="font-semibold text-amber-400 text-[10px] uppercase tracking-wider mb-1">
+                            ¿Por qué te la recomendamos?
+                          </p>
+                          {item.rationale}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-3 border-t border-slate-800/50 mt-auto">
+                        <button
+                          onClick={() => handleAddToFavorites(item)}
+                          disabled={savingFavId === item.id}
+                          className="w-full flex items-center justify-center space-x-1.5 px-3 py-2 bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white border border-rose-500/20 hover:border-rose-500 rounded-xl text-xs font-semibold transition-all duration-200 active:scale-95 disabled:opacity-50 cursor-pointer"
+                          title="Agregar a favoritos y remover de recomendaciones"
+                        >
+                          {savingFavId === item.id ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>Guardando...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Heart className="w-3.5 h-3.5 fill-rose-500/20" />
+                              <span>Agregar a Favoritos</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
-                    {activeJob.result.overview && (
-                      <p className="text-xs text-slate-400 line-clamp-3">
-                        {activeJob.result.overview}
-                      </p>
-                    )}
-                  </div>
+                  ))}
                 </div>
               </div>
             )}

@@ -9,10 +9,10 @@ Combina el catálogo de películas de **The Movie Database (TMDB)** con un motor
 
 * 🔐 **Autenticación & Usuarios:** Registro e inicio de sesión con JWT y contraseñas hasheadas (`bcrypt`).
 * 🎥 **Catálogo TMDB:** Explorador de películas populares y búsqueda por título con paginación y caché en Redis.
-* ❤️ **Gestión de Favoritos (Me Gusta):** Marcado y desmarcado de películas favoritas persistidas en **Supabase (PostgreSQL)**.
-* 🤖 **Recomendaciones con IA (Groq):** Inferencia con respuestas estructuradas en JSON que justifican la recomendación según el historial del usuario.
+* ❤️ **Gestión de Favoritos (Me Gusta):** Marcado y desmarcado de películas favoritas persistidas en **Supabase (PostgreSQL)**, permitiendo además convertir recomendaciones directamente a favoritos.
+* 🤖 **Recomendaciones con IA (Groq):** Inferencia con respuestas estructuradas en JSON. Solicita 10 candidatos al LLM, deduplica contra favoritos y recomendaciones previas, y entrega el **Top 3 de películas recomendadas** justificadas.
 * ⚡ **Worker Asíncrono con Rate Limiting:** Encolamiento en Redis y limitador de tasa *Token Bucket* para respetar los límites de cuota (RPM/TPM) de Groq con reintentos y *Exponential Backoff*.
-* 💻 **Frontend Moderno:** Single Page Application (SPA) en React + Vite + Tailwind CSS con polling reactivo de trabajos en segundo plano.
+* 💻 **Frontend Moderno:** Single Page Application (SPA) en React + Vite + Tailwind CSS con polling reactivo de trabajos en segundo plano y gestión de historial.
 * 🐳 **100% Dockerizado:** Despliegue de todo el stack en un solo comando con `docker compose up --build`.
 
 ---
@@ -27,9 +27,10 @@ flowchart LR
     API <-->|"Persistencia"| Supabase[("Supabase (PostgreSQL)")]
     API -->|"Encola Job"| Redis
     Redis -->|"Consume con Token Bucket"| Worker["Worker Asíncrono (Python)"]
-    Worker -->|"Inferencia JSON"| Groq["Groq API"]
-    Worker -->|"Enriquecimiento"| TMDB
-    Worker -->|"Persiste Recomendación"| Supabase
+    Worker -->|"10 Candidatos JSON"| Groq["Groq API"]
+    Worker -->|"Deduplica & Top 3"| Worker
+    Worker -->|"Enriquecimiento TMDB"| TMDB
+    Worker -->|"Persiste Top 3"| Supabase
 ```
 
 Para una explicación exhaustiva de las decisiones y diagramas detallados, consulta [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).

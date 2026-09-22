@@ -47,13 +47,23 @@ flowchart LR
     API -.->|"6. Responde {jobId, status: PENDING}"| UI
 
     Worker -->|"7. Consume Jobs con Rate Limiting"| Redis
-    Worker -->|"8. Obtiene gustos del usuario"| Supabase
-    Worker -->|"9. Inferencia JSON estructurada"| Groq
-    Worker -->|"10. Enriquecimiento de póster/detalles"| TMDB
-    Worker -->|"11. Guarda resultado (COMPLETED)"| Supabase
+    Worker -->|"8. Obtiene favoritos e historial previo"| Supabase
+    Worker -->|"9. Inferencia JSON estructurada (10 candidatos)"| Groq
+    Worker -->|"10. Deduplica contra historial y filtra Top 3"| Worker
+    Worker -->|"11. Enriquecimiento de póster/detalles"| TMDB
+    Worker -->|"12. Guarda Top 3 recomendaciones (COMPLETED)"| Supabase
 
-    UI -.->|"12. Polling de Estado (/status/:jobId)"| API
+    UI -.->|"13. Polling de Estado (/status/:jobId)"| API
 ```
+
+---
+
+### 1.1. Pipeline Inteligente Anti-Duplicados
+Para garantizar que el usuario nunca reciba recomendaciones repetidas, el sistema implementa un pipeline de cuatro fases:
+1. **Generación Amplia (10 Candidatos):** Se consulta a Groq solicitando 10 recomendaciones de películas diversas basadas en el perfil de gustos, enviando la lista de títulos ya conocidos para guiar al LLM.
+2. **Deduplicación Estricta:** El backend normaliza los títulos candidatos y los contrasta contra el conjunto de películas en favoritos (`user_likes`) y el historial completo de recomendaciones previas (`recommendations`).
+3. **Selección Top 3:** Se extraen las primeras 3 recomendaciones únicas y no vistas.
+4. **Enriquecimiento y Persistencia:** Cada una de las 3 películas es consultada en TMDB para obtener metadatos y póster oficial, persistiendo cada recomendación de forma individual en Supabase.
 
 ---
 

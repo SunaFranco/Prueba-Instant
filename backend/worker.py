@@ -44,57 +44,112 @@ def process_recommendation_job(job_data: dict, rate_limiter: TokenBucketRateLimi
             except Exception as e:
                 logger.warning(f"No se pudieron leer likes de Supabase ({str(e)}). Continuando...")
 
-        logger.info(f"Usuario {username} tiene {len(user_likes)} películas en favoritos.")
+        # 3. Obtener historial previo de recomendaciones del usuario para evitar duplicados
+        previous_titles = []
+        if supabase:
+            try:
+                prev_res = supabase.table("recommendations") \
+                    .select("recommended_title") \
+                    .eq("user_id", user_id) \
+                    .neq("status", "FAILED") \
+                    .execute()
+                previous_titles = [r["recommended_title"] for r in (prev_res.data or []) if r.get("recommended_title")]
+            except Exception as e:
+                logger.warning(f"No se pudieron leer recomendaciones previas de Supabase ({str(e)}).")
 
-        # 3. Aplicar Rate Limiting para la llamada a Groq
+        excluded_titles = list(set([m.get("title", "") for m in user_likes if m.get("title")] + previous_titles))
+        normalized_excluded = {t.strip().lower() for t in excluded_titles if t}
+        logger.info(f"Usuario {username} tiene {len(user_likes)} favoritos y {len(previous_titles)} recomendaciones previas ({len(normalized_excluded)} títulos excluidos).")
+
+        # 4. Aplicar Rate Limiting para la llamada a Groq
         logger.info("Verificando cupo en el Rate Limiter de Groq...")
         acquired = rate_limiter.acquire(tokens_requested=1, timeout=60.0)
         if not acquired:
             raise TimeoutError("Se agotó el tiempo de espera por cuota de Rate Limiter.")
 
-        # 4. Generar recomendación con el LLM (Groq)
-        rec_output = GroqService.generate_movie_recommendation(
+        # 5. Generar 10 recomendaciones candidatas con el LLM (Groq)
+        groq_candidates = GroqService.generate_movie_recommendations(
             user_likes=user_likes,
+            excluded_titles=excluded_titles,
             username=username
         )
-        logger.info(f"Groq recomendó: '{rec_output.title}' ({rec_output.release_year})")
+        logger.info(f"Groq devolvió {len(groq_candidates)} películas candidatas.")
 
-        # 5. Enriquecer con metadatos y póster de TMDB
-        tmdb_movie = TmdbService.find_movie_by_title_and_year(
-            title=rec_output.title,
-            year=rec_output.release_year
-        )
+        # 6. Filtrar candidatos contra historial y seleccionar Top 3
+        selected_candidates = []
+        seen_in_batch = set()
 
-        recommended_tmdb_id = None
-        if tmdb_movie and tmdb_movie.get("tmdb_id"):
-            recommended_tmdb_id = tmdb_movie["tmdb_id"]
-            # Guardar película recomendada en tabla movies
-            if supabase:
-                try:
-                    supabase.table("movies").upsert({
-                        "tmdb_id": recommended_tmdb_id,
-                        "title": tmdb_movie.get("title", rec_output.title),
-                        "overview": tmdb_movie.get("overview", ""),
-                        "poster_path": tmdb_movie.get("poster_path"),
-                        "release_date": tmdb_movie.get("release_date"),
-                        "genres": tmdb_movie.get("genres", rec_output.genres),
-                        "vote_average": tmdb_movie.get("vote_average", 0.0)
-                    }).execute()
-                except Exception as e:
-                    logger.warning(f"No se pudo guardar la película en la tabla movies: {str(e)}")
+        for item in groq_candidates:
+            norm_title = item.title.strip().lower()
+            if norm_title not in normalized_excluded and norm_title not in seen_in_batch:
+                selected_candidates.append(item)
+                seen_in_batch.add(norm_title)
+            if len(selected_candidates) >= 3:
+                break
 
-        # 6. Actualizar recomendación a COMPLETED en Supabase
+        # Fallback si quedaron menos de 3 tras el filtro estricto
+        if len(selected_candidates) < 3:
+            for item in groq_candidates:
+                norm_title = item.title.strip().lower()
+                if norm_title not in seen_in_batch:
+                    selected_candidates.append(item)
+                    seen_in_batch.add(norm_title)
+                if len(selected_candidates) >= 3:
+                    break
+
+        logger.info(f"Seleccionadas {len(selected_candidates)} recomendaciones finales para el usuario.")
+
+        # 7. Enriquecer con TMDB y persistir en Supabase
         completed_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        if supabase:
-            supabase.table("recommendations").update({
-                "status": "COMPLETED",
-                "recommended_title": rec_output.title,
-                "recommended_tmdb_id": recommended_tmdb_id,
-                "rationale": rec_output.rationale,
-                "completed_at": completed_at
-            }).eq("job_id", job_id).execute()
 
-        logger.info(f"✔ Trabajo {job_id} completado y persistido exitosamente.")
+        for idx, rec_item in enumerate(selected_candidates):
+            tmdb_movie = TmdbService.find_movie_by_title_and_year(
+                title=rec_item.title,
+                year=rec_item.release_year
+            )
+
+            recommended_tmdb_id = None
+            if tmdb_movie and tmdb_movie.get("tmdb_id"):
+                recommended_tmdb_id = tmdb_movie["tmdb_id"]
+                if supabase:
+                    try:
+                        supabase.table("movies").upsert({
+                            "tmdb_id": recommended_tmdb_id,
+                            "title": tmdb_movie.get("title", rec_item.title),
+                            "overview": tmdb_movie.get("overview", ""),
+                            "poster_path": tmdb_movie.get("poster_path"),
+                            "release_date": tmdb_movie.get("release_date"),
+                            "genres": tmdb_movie.get("genres", rec_item.genres),
+                            "vote_average": tmdb_movie.get("vote_average", 0.0)
+                        }).execute()
+                    except Exception as e:
+                        logger.warning(f"No se pudo guardar la película en tabla movies: {str(e)}")
+
+            # Persistencia en Supabase
+            if supabase:
+                if idx == 0:
+                    # Actualizar registro principal
+                    supabase.table("recommendations").update({
+                        "status": "COMPLETED",
+                        "recommended_title": rec_item.title,
+                        "recommended_tmdb_id": recommended_tmdb_id,
+                        "rationale": rec_item.rationale,
+                        "completed_at": completed_at
+                    }).eq("job_id", job_id).execute()
+                else:
+                    # Insertar registros complementarios del mismo trabajo
+                    child_job_id = f"{job_id}_{idx+1}"
+                    supabase.table("recommendations").insert({
+                        "user_id": user_id,
+                        "job_id": child_job_id,
+                        "status": "COMPLETED",
+                        "recommended_title": rec_item.title,
+                        "recommended_tmdb_id": recommended_tmdb_id,
+                        "rationale": rec_item.rationale,
+                        "completed_at": completed_at
+                    }).execute()
+
+        logger.info(f"✔ Trabajo {job_id} procesado exitosamente con {len(selected_candidates)} recomendaciones.")
 
     except Exception as e:
         logger.error(f"✘ Fallo al procesar trabajo {job_id}: {str(e)}")
