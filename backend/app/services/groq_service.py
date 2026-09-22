@@ -87,8 +87,17 @@ class GroqService:
                     max_tokens=500
                 )
 
-                content = chat_completion.choices[0].message.content
+                content = (chat_completion.choices[0].message.content or "").strip()
                 logger.debug(f"Respuesta cruda de Groq: {content}")
+
+                # Limpieza de posibles bloques markdown de código (```json ... ```)
+                if content.startswith("```"):
+                    lines = content.splitlines()
+                    if lines[0].startswith("```"):
+                        lines = lines[1:]
+                    if lines and lines[-1].startswith("```"):
+                        lines = lines[:-1]
+                    content = "\n".join(lines).strip()
 
                 parsed_json = json.loads(content)
                 # Validar con Pydantic

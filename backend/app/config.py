@@ -23,7 +23,7 @@ class Config:
 
     # Groq Cloud API
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
-    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
     GROQ_MAX_REQUESTS_PER_MINUTE: int = int(os.getenv("GROQ_MAX_REQUESTS_PER_MINUTE", "20"))
     GROQ_RETRY_MAX_ATTEMPTS: int = int(os.getenv("GROQ_RETRY_MAX_ATTEMPTS", "5"))
 

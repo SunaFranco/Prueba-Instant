@@ -45,7 +45,16 @@ def request_recommendation():
     
     enqueued = enqueue_recommendation_job(payload)
     if not enqueued:
-        logger.warning(f"No se pudo encolar en Redis. El worker procesará el trabajo por escaneo o reintento.")
+        logger.warning("Redis no disponible para encolar. Procesando recomendación en segundo plano (fallback)...")
+        import threading
+        from app.queue.rate_limiter import TokenBucketRateLimiter
+        try:
+            from worker import process_recommendation_job
+            limiter = TokenBucketRateLimiter(redis_client=None, rate_per_minute=20)
+            t = threading.Thread(target=process_recommendation_job, args=(payload, limiter), daemon=True)
+            t.start()
+        except Exception as e:
+            logger.error(f"Error al iniciar hilo de procesamiento fallback: {str(e)}")
 
     return jsonify({
         "message": "Solicitud de recomendación encolada exitosamente",

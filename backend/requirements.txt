@@ -1,7 +1,6 @@
 flask==3.0.3
 flask-cors==5.0.0
-supabase==2.8.2
-postgrest==0.16.10
+supabase==2.8.1
 gotrue==2.9.1
 pyjwt==2.9.0
 bcrypt==4.2.0
