@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { recommendationsApi } from '../services/api';
-import { Sparkles, Loader2, Calendar, Star, AlertCircle, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { recommendationsApi, likesApi } from '../services/api';
+import { Sparkles, Loader2, Calendar, Star, AlertCircle, RefreshCw, CheckCircle2, Heart } from 'lucide-react';
 
 export const RecommendationsPage = () => {
   const [recommendations, setRecommendations] = useState([]);
   const [loadingList, setLoadingList] = useState(true);
   const [requesting, setRequesting] = useState(false);
   const [activeJob, setActiveJob] = useState(null); // { jobId, status, result, error }
+  const [savingFavId, setSavingFavId] = useState(null);
   const pollIntervalRef = useRef(null);
 
   // Cargar historial de recomendaciones previas
@@ -28,6 +29,33 @@ export const RecommendationsPage = () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
   }, []);
+
+  // Agregar a favoritos y remover del historial
+  const handleAddToFavorites = async (rec) => {
+    if (!rec || savingFavId) return;
+    setSavingFavId(rec.id);
+    try {
+      const tmdbId = rec.recommended_tmdb_id || 0;
+      await likesApi.addLike(tmdbId, {
+        title: rec.recommended_title,
+        overview: rec.overview,
+        poster_path: rec.poster_path,
+        release_date: rec.release_date,
+        genres: rec.genres,
+        vote_average: rec.vote_average,
+      });
+
+      // Eliminar de Supabase / backend
+      await recommendationsApi.deleteRecommendation(rec.id);
+
+      // Remover inmediatamente del estado local de la lista
+      setRecommendations((prev) => prev.filter((r) => r.id !== rec.id));
+    } catch (err) {
+      console.error('Error al agregar a favoritos desde historial:', err);
+    } finally {
+      setSavingFavId(null);
+    }
+  };
 
   // Polling del estado del trabajo en segundo plano
   const startPolling = (jobId) => {
@@ -230,14 +258,35 @@ export const RecommendationsPage = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-800/50 mt-auto">
-                    <span>{rec.created_at?.slice(0, 10)}</span>
-                    {rec.vote_average > 0 && (
-                      <span className="flex items-center space-x-1 text-amber-400 font-bold">
-                        <Star className="w-3 h-3 fill-amber-400" />
-                        <span>{rec.vote_average}</span>
-                      </span>
-                    )}
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 pt-3 border-t border-slate-800/50 mt-auto">
+                    <div className="flex items-center space-x-3">
+                      <span>{rec.created_at?.slice(0, 10)}</span>
+                      {rec.vote_average > 0 && (
+                        <span className="flex items-center space-x-1 text-amber-400 font-bold">
+                          <Star className="w-3 h-3 fill-amber-400" />
+                          <span>{rec.vote_average}</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => handleAddToFavorites(rec)}
+                      disabled={savingFavId === rec.id}
+                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white border border-rose-500/20 hover:border-rose-500 rounded-xl text-xs font-semibold transition-all duration-200 active:scale-95 disabled:opacity-50 ml-auto shadow-sm cursor-pointer"
+                      title="Agregar a favoritos y remover de recomendaciones"
+                    >
+                      {savingFavId === rec.id ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Guardando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Heart className="w-3.5 h-3.5 fill-rose-500/20" />
+                          <span>Agregar a Favoritos</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
               </div>

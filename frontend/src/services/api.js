@@ -65,6 +65,7 @@ export const recommendationsApi = {
   requestRecommendation: () => api.post('/recommendations/request'),
   getStatus: (jobId) => api.get(`/recommendations/status/${jobId}`),
   getRecommendations: () => api.get('/recommendations'),
+  deleteRecommendation: (recId) => api.delete(`/recommendations/${recId}`),
 };
 
 export default api;

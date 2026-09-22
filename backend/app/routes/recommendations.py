@@ -153,3 +153,25 @@ def list_recommendations():
     except Exception as e:
         logger.error(f"Error listando recomendaciones: {str(e)}")
         raise AppException("Error al obtener historial de recomendaciones", 500)
+
+@recommendations_bp.route("/<string:rec_id>", methods=["DELETE"])
+@jwt_required
+def delete_recommendation(rec_id: str):
+    user_id = g.user_id
+    supabase = get_supabase()
+
+    if not supabase:
+        raise AppException("Servicio de base de datos no disponible", 503)
+
+    try:
+        supabase.table("recommendations") \
+            .delete() \
+            .eq("id", rec_id) \
+            .eq("user_id", user_id) \
+            .execute()
+
+        return jsonify({"message": "Recomendación eliminada exitosamente", "id": rec_id}), 200
+    except Exception as e:
+        logger.error(f"Error eliminando recomendación {rec_id}: {str(e)}")
+        raise AppException("Error al eliminar la recomendación", 500)
+
