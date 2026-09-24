@@ -1,23 +1,23 @@
-# 🎬 Sistema de Recomendación de Películas con LLMs (Instant)
+# Sistema de Recomendación de Películas con LLMs (Instant)
 
 Solución integral y modular para la prueba técnica de **Instant (Junior Software Developer)**.  
 Combina el catálogo de películas de **The Movie Database (TMDB)** con un motor de recomendación inteligente impulsado por **Groq Cloud API** (`llama-3.3-70b-versatile`), desacoplado mediante una cola de eventos en **Redis** con algoritmo de **Rate Limiting (Token Bucket)** en un worker de Python.
 
 ---
 
-## 🌟 Características Principales
+## Características Principales
 
-* 🔐 **Autenticación & Usuarios:** Registro e inicio de sesión con JWT y contraseñas hasheadas (`bcrypt`).
-* 🎥 **Catálogo TMDB:** Explorador de películas populares y búsqueda por título con paginación y caché en Redis.
-* ❤️ **Gestión de Favoritos (Me Gusta):** Marcado y desmarcado de películas favoritas persistidas en **Supabase (PostgreSQL)**, permitiendo además convertir recomendaciones directamente a favoritos.
-* 🤖 **Recomendaciones con IA (Groq):** Inferencia con respuestas estructuradas en JSON. Solicita 10 candidatos al LLM, deduplica contra favoritos y recomendaciones previas, y entrega el **Top 3 de películas recomendadas** justificadas.
-* ⚡ **Worker Asíncrono con Rate Limiting:** Encolamiento en Redis y limitador de tasa *Token Bucket* para respetar los límites de cuota (RPM/TPM) de Groq con reintentos y *Exponential Backoff*.
-* 💻 **Frontend Moderno:** Single Page Application (SPA) en React + Vite + Tailwind CSS con polling reactivo de trabajos en segundo plano y gestión de historial.
-* 🐳 **100% Dockerizado:** Despliegue de todo el stack en un solo comando con `docker compose up --build`.
+*  **Autenticación & Usuarios:** Registro e inicio de sesión con JWT y contraseñas hasheadas (`bcrypt`).
+*  **Catálogo TMDB:** Explorador de películas populares y búsqueda por título con paginación y caché en Redis.
+*  **Gestión de Favoritos (Me Gusta):** Marcado y desmarcado de películas favoritas persistidas en **Supabase (PostgreSQL)**, permitiendo además convertir recomendaciones directamente a favoritos.
+*  **Recomendaciones con IA (Groq):** Inferencia con respuestas estructuradas en JSON. Solicita 10 candidatos al LLM, deduplica contra favoritos y recomendaciones previas, y entrega el **Top 3 de películas recomendadas** justificadas.
+*  **Worker Asíncrono con Rate Limiting:** Encolamiento en Redis y limitador de tasa *Token Bucket* para respetar los límites de cuota (RPM/TPM) de Groq con reintentos y *Exponential Backoff*.
+*  **Frontend Moderno:** Single Page Application (SPA) en React + Vite + Tailwind CSS con polling reactivo de trabajos en segundo plano y gestión de historial.
+*  **100% Dockerizado:** Despliegue de todo el stack en un solo comando con `docker compose up --build`.
 
 ---
 
-## 🏗️ Arquitectura de la Solución
+## Arquitectura de la Solución
 
 ```mermaid
 flowchart LR
@@ -37,7 +37,7 @@ Para una explicación exhaustiva de las decisiones y diagramas detallados, consu
 
 ---
 
-## 🚀 Puesta en Marcha Rápida (Docker Compose)
+## Puesta en Marcha Rápida (Docker Compose)
 
 ### 1. Clonar el repositorio y configurar variables de entorno
 ```bash
@@ -65,13 +65,13 @@ docker compose up --build
 ```
 
 Una vez levantado:
-* 🌐 **Frontend:** `http://localhost:3000`
-* 🔌 **Backend API:** `http://localhost:5000/api`
-* 🩺 **Healthcheck:** `http://localhost:5000/api/health`
+* **Frontend:** `http://localhost:3000`
+* **Backend API:** `http://localhost:5000/api`
+* **Healthcheck:** `http://localhost:5000/api/health`
 
 ---
 
-## 🛠️ Ejecución en Desarrollo Local (Sin Docker)
+## Ejecución en Desarrollo Local (Sin Docker)
 
 ### Backend
 ```bash
@@ -101,9 +101,9 @@ npm run dev
 
 ---
 
-## 📚 Documentación de Referencia
+## Documentación de Referencia
 
-* 📖 **[Arquitectura y Decisiones de Diseño (ARCHITECTURE.md)](docs/ARCHITECTURE.md)**
-* 🔌 **[Especificación de Endpoints (ENDPOINTS.md)](docs/ENDPOINTS.md)**
-* 🗄️ **[Esquema de Base de Datos SQL (schema.sql)](docs/schema.sql)**
-* 🤖 **[Directrices para Agentes de IA (AGENTS.md)](AGENTS.md)**
+* **[Arquitectura y Decisiones de Diseño (ARCHITECTURE.md)](docs/ARCHITECTURE.md)**
+* **[Especificación de Endpoints (ENDPOINTS.md)](docs/ENDPOINTS.md)**
+* **[Esquema de Base de Datos SQL (schema.sql)](docs/schema.sql)**
+* **[Directrices para Agentes de IA (AGENTS.md)](AGENTS.md)**
